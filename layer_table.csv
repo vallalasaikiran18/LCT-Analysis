@@ -1,0 +1,62 @@
+﻿Unique Name,Combination,Target
+AST-BR-01,1/4,Spodumene
+AST-BR-02,1/3,Spodumene
+AST-BR-03,4/2,Spodumene
+AST-BR-04,4/6,Spodumene
+AST-BR-05,12/6,Lepidolite
+AST-BR-06,7/6,Lepidolite
+AST-BR-07,4/3,Lepidolite
+AST-BR-08,4/5,Lepidolite
+AST-BR-09,7/5,Amblygonite
+AST-BR-10,3/5,Amblygonite
+AST-BR-11,7/10,Amblygonite
+AST-BR-12,9/10,Cookeite
+AST-BR-13,3/2,Cookeite
+AST-BR-14,3/4,Cookeite
+AST-BR-15,2/1,Iron oxides / oxidation zones
+AST-BR-16,5/6,Lithology / mineral contrast
+AST-BR-17,8/9,Chlorite-epidote / Mg-OH minerals
+AST-BR-18,7/6,Muscovite / mica alteration
+AST-BR-19,14/12,Quartz / silica-rich rocks
+AST-BR-20,13/14,Carbonate minerals
+AST-BR-21,4/5,Alunite
+AST-BR-22,4/7,Calcite
+AST-BR-23,4/6,Kaolinite
+AST-IDX-01,RBD8:  (7 + 9) / 8,Carbonate minerals
+AST-IDX-02,RBD6:  (5 + 7) / 6,Muscovite / mica alteration
+AST-IDX-03,RBD5:  (4 + 6) / 5,Kaolinite
+AST-IDX-04,RBD13:  (12 + 14) / (2 × 13),Mafic-ultramafic rocks
+AST-IDX-05,OH index (OHI):  (4 × 7) / (5 × 5),Hydroxyl-bearing minerals
+AST-IDX-06,Pyrophyllite index (PI):  (4 × 6) / (5 × 5),Lithology / mineral contrast
+AST-IDX-07,Mafic index (MI):  12 / 13,Mafic-ultramafic rocks
+AST-IDX-08,Mafic-ultramafic M1:  (13 − 0.9147) × (10 − 1.4366),Mafic-ultramafic rocks
+AST-IDX-09,Mafic-ultramafic M2:  (13 − 0.8945) × (11 − 1.2404),Mafic-ultramafic rocks
+AST-IDX-10,Quartz index (QI):  (11 × 11) / (10 × 12),Quartz / silica-rich rocks
+AST-IDX-11,Carbonate index (CI):  13 / 14,Calcite
+AST-IDX-12,SiO₂ content index:  13 / 12,Quartz / silica-rich rocks
+AST-IDX-13,OH-bearing index:  (7 / 6) × (4 / 6),Hydroxyl-bearing minerals
+AST-IDX-14,Kaolinite index (KLI):  (4 / 5) × (8 / 6),Kaolinite
+AST-IDX-15,Alunite index (ALI):  (7 / 5) × (7 / 8),Alunite
+AST-IDX-16,Calcite index (CLI):  (6 / 8) × (9 / 8),Calcite
+AST-IDX-17,SiO₂ (silica) index:  28.76 × lg[(6.560 × 13 × 14) / (11 × 12)],Hydrothermal alteration
+S2-BR-01,3/8,Spodumene
+S2-BR-02,4/12,Lepidolite
+S2-BR-03,11/12,Clay / hydroxyl alteration
+S2-BR-04,8A/11,Mica / hydroxyl alteration
+S2-BR-05,11/8A,Quartz / silica-rich rocks
+S2-BR-06,11/4,Quartz / silica-rich rocks
+S2-BR-07,4/2,Iron oxides / oxidation zones
+S2-BR-08,(B4−B2)/(B4+B2),Iron oxides / oxidation zones
+S2-IDX-01,IHAI = norm(B2/B3) + norm(B11/B12) + norm[(B4−B2)/(B4+B2)],Hydrothermal / iron-oxide alteration
+S2-EXT-01,eB14:  B3²,Lithium-bearing pegmatites
+S2-EXT-02,eB15:  B4²,Bare rock / vegetation separation
+S2-EXT-03,eB16:  B8²,Bare rock / vegetation separation
+S2-EXT-04,eB24:  B3 × B4,Pegmatite / exposed rock
+S2-EXT-05,eB25:  B3 × B8,Bare rock / vegetation separation
+S2-EXT-06,eB28:  B4 × B8,Bare rock / vegetation separation
+S2-EXT-07,eB29:  B4 × B11,Hydroxyl-bearing minerals
+S2-EXT-08,eB31:  B8 × B11,Bare rock / vegetation separation
+S2A-BR-01,11/12,Clay / hydroxyl alteration
+S2A-BR-02,4/2,Iron oxides / oxidation zones
+S2A-BR-03,4/11,Iron oxides / oxidation zones
+S2A-BR-04,3/8,Spodumene

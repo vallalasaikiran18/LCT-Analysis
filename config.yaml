@@ -1,0 +1,314 @@
+# =====================================================================================
+# LCT-pegmatite prospectivity - SENSOR COMPARISON with the fuzzy gamma model (M1).
+#
+# One M1 run per data source (ASTER-only, Sentinel-2-only, DEM-only), each with its own
+# feature selection, all scored on ONE common analysis mask, evaluated against spatially
+# held-out known occurrences, then a blinded field test for the winning source.
+#
+# Items marked REVIEW are geological assumptions (directions, weights). FREEZE them before
+# the first `--stage evaluate`. After that, every change is scored on the held-out set only.
+# =====================================================================================
+paths:
+ input_root: 'C:\Users\Saikiran.v\OneDrive - Praval\Desktop\Mineral Exploration Analysis\Kafura_Project\kafura-1 Prospectivity'        # absolute, or relative to this file
+ output_root: 'C:\Users\Saikiran.v\OneDrive - Praval\Desktop\Mineral Exploration Analysis\Kafura_Project\kafura-1_LCT_SensorComparison'
+
+project:
+  name: SL
+  seed: 42
+  n_jobs: -1
+  log_level: INFO
+
+# ------------------------------------------------------------------ what runs
+# Each feature set takes ONLY the layers of the listed sensors. Features engineered from shapefiles
+# (lineaments, streams) join the set named in engineer.vector_sources.<source>.feature_set.
+feature_sets:
+  ASTER: {sensors: [ASTER], dir: ASTER}
+  S2:    {sensors: [S2],    dir: Sentinel2}
+  DEM:   {sensors: [DEM],   dir: DEM}
+run:
+  sets: [ASTER, S2, DEM]
+  models: [M1]                               # M2 / M3 still work with --models M2 M3, but are not run by default
+
+comparison:
+  common_domain: true                        # all sets are scored and evaluated on exactly the same pixels
+  layer_count_test:
+    n_subsets: 30                            # random feature subsets per (set, k)
+    k_values: null                           # null = 2 .. smallest set size, plus each set's full size
+    max_pixels: 200000                       # pixel subsample for speed
+
+# ------------------------------------------------------------------ master grid
+grid:
+  reference: null
+  reference_candidates:
+    - "DEM Features/DEM_utm.tif"
+    - "DEM Features/dem_clip.tif"
+    - "Remote Sensing/ASTER/AST-BR-01.tif"
+  target_crs: null
+  resolution: 30
+  crop_to_aoi: true
+
+# ------------------------------------------------------------------ inputs
+inputs:
+  aoi: 'C:\Users\Saikiran.v\OneDrive - Praval\Desktop\Mineral Exploration Analysis\Kafura_Project\Kafura-1 Shapefile\Corrected_AOI.shp'
+  assume_vector_crs: "EPSG:4326"
+  raster_patterns: ["*.tif", "*.tiff"]
+  raster_groups:                             # folder and sensor tag (the sensor decides the feature set)
+    ASTER:     {path: "Remote Sensing/ASTER",      sensor: ASTER}
+    Sentinel2: {path: "Remote Sensing/Sentinel-2", sensor: S2}
+    DEM:       {path: "DEM Features",              sensor: DEM}
+  layer_table: "layer_table.csv"             # Unique Name | Combination | Target
+  metadata_files:
+    ASTER: "Raw Data Information/ASTER Metadata.txt"
+    S2:    "Raw Data Information/Sentinel-2 Metadata.txt"
+  # Known LCT-pegmatite occurrences (mines, workings, mapped Li-pegmatites, survey records): shp/gpkg, or
+  # csv/xlsx with lon/lat columns. Used ONLY in --stage evaluate, split into calibration / held-out.
+  known_occurrences: null                    # e.g. "Occurrences/Li_pegmatite_occurrences.shp"
+  occurrence_columns: {lon: lon, lat: lat, crs: "EPSG:4326"}
+  known_buffer_m: 500
+
+qa:
+  aster_swir_failure_date: "2008-04-01"
+  date_regex: '(?:Acquisition time|SENSING_TIME|start_time)\s*:\s*(\d{4}-\d{2}-\d{2})'
+  swir_sensor_key: ASTER
+  grid_offset_flag_px: 0.02
+  stripe_ratio_flag: 3.0
+
+# ------------------------------------------------------------------ layer handling
+layers:
+  exclude_regex: ['-RGB-', '^HS_', '^fill$', '^dem_clip$', '^DEM_utm$', '^flowdir$', 'MASK', 'NDVI', 'MNDWI',
+                  '^streamnetwork$', '^streamorder$', '^ridgelines$']
+  exclude_multiband: true
+  categorical_regex: ['^flowdir$', '^streamnetwork$', '^streamorder$', '^ridgelines$', 'MASK']
+  exclude_mixed_units: true
+  tir_sensor: ASTER
+  tir_band_min: 10
+  tir_weight_multiplier: 0.5
+  tir_support_layer: TIR_SUPPORT_MASK
+  band_overrides:                            # where the formula text is ambiguous (e.g. '2 x 13' is a multiplier)
+    AST-IDX-04: [12, 13, 14]
+
+defaults: {family: unclassified, direction: neutral, weight: 1.0}
+
+# First match wins. name_rules beat target_rules. direction: high | low | band | neutral   REVIEW
+name_rules:
+  - {match: '^AST-IDX-17$',             family: quartz_felsic,   direction: high, label: "SiO2 (silica) index, TIR"}
+  - {match: '^AST-IDX-06$',             family: AlOH_muscovite,  direction: high, label: "pyrophyllite index (Al-OH)"}
+  - {match: '^slope$',                  family: topography, direction: low,  label: "slope (steep = unfavourable)"}
+  - {match: '^rugged$',                 family: topography, direction: low,  label: "ruggedness (high = unfavourable)"}
+  - {match: '^residual_',               family: topography, direction: high, label: "elevation residual (topographic high)"}
+  - {match: '^tpi_',                    family: topography, direction: high, label: "topographic position index"}
+  - {match: '^relief_',                 family: topography, direction: neutral}
+  - {match: '^curv',                    family: topography, direction: neutral}
+  - {match: '^(mean_|dem_smooth)',      family: elevation_context, direction: neutral}
+  - {match: '^flowacc$',                family: hydrology, direction: neutral}
+  - {match: '^streamdensity$',          family: hydrology, direction: high, weight: 0.5, label: "stream density (fracture proxy)"}
+
+target_rules:                              # matched against the 'Target' column of layer_table.csv. REVIEW
+  - {match: 'vegetation separation',                         family: surface_exposure,   direction: neutral}
+  - {match: 'spodumene|lepidolite|amblygonite|cookeite|lithium|pegmatite', family: Li_pegmatite_proxy, direction: high, weight: 0.7}
+  - {match: 'muscovite|mica|clay|hydroxyl|kaolinite|alunite|hydrothermal', family: AlOH_muscovite,    direction: high}
+  - {match: 'quartz|silica|felsic|lithology',                family: quartz_felsic,      direction: high}
+  - {match: 'mafic|chlorite',                                family: mafic_host,         direction: band, center: 0.65, width: 0.2}
+  - {match: 'iron',                                          family: iron_context,       direction: low,  weight: 0.5}
+  - {match: 'carbonate|calcite',                             family: carbonate_context,  direction: neutral}
+  - {match: 'fault|lineament',                               family: structure,          direction: high}
+  - {match: 'exposed rock|bare rock',                        family: surface_exposure,   direction: high}
+
+# ------------------------------------------------------------------ spectral check (physics before statistics)
+# Resamples library spectra to each sensor's bands and tests whether each ratio in layer_table.csv can
+# separate its labelled target mineral from the other minerals. Download USGS splib07a (ASCII, ASD
+# 0.35-2.5 um, https://doi.org/10.5066/F7RR1WDJ) and point library_dir at it. Patterns are globs on file
+# names; several samples per mineral are fine (the worst-case sample is used). Missing minerals are reported.
+spectral_check:
+  enabled: true
+  library_dir: "Spectral Library/splib07a"
+  wavelength_file: "splib07a_Wavelengths_ASD_0.35-2.5_microns_2151_ch.txt"   # null if spectrum files have two columns
+  minerals:
+    spodumene:  {pattern: "*Spodumene*ASD*",  class: featureless_silicate}
+    lepidolite: {pattern: "*Lepidolite*ASD*", class: AlOH}
+    muscovite:  {pattern: "*Muscovite*ASD*",  class: AlOH}
+    albite:     {pattern: "*Albite*ASD*",     class: featureless_silicate}
+    quartz:     {pattern: "*Quartz*ASD*",     class: featureless_silicate}
+    kaolinite:  {pattern: "*Kaolinite*ASD*",  class: AlOH}
+    chlorite:   {pattern: "*Chlorite*ASD*",   class: MgFeOH}
+  target_map:                                # regex on the layer_table Target -> library minerals
+    'spodumene': [spodumene]
+    'lepidolite': [lepidolite]
+    'muscovite|mica': [muscovite]
+    'hydroxyl|clay': [muscovite, lepidolite, kaolinite]
+    'kaolinite': [kaolinite]
+    'quartz|silica': [quartz]
+    'chlorite': [chlorite]
+    'lithium-bearing pegmatite': [spodumene, lepidolite]
+  class_family: {AlOH: AlOH_muscovite, featureless_silicate: quartz_felsic, MgFeOH: mafic_host}
+  margin_frac: 0.10                          # target must beat every other mineral by >= 10% of the index range
+  mixing_background: [quartz, albite]        # host for the sub-pixel test (dykes are narrower than a pixel)
+  srf_file: null                             # optional CSV: wavelength_nm, ASTER_1.., S2_B1..; null = Gaussian centre/FWHM
+  apply_relabel: false                       # true: move flagged layers to the suggested generic family BEFORE freezing
+
+# ------------------------------------------------------------------ masks and flags
+# applies_to = feature-set names. With comparison.common_domain the UNION of all masks is removed from every
+# set: each sensor's vegetation mask uses its own date, and all sets still share the same pixels.
+masks:
+  rules:
+    - {name: vegetation_ASTER, layer: AST-NDVI, op: ">", mode: percentile, value: 85, buffer_px: 2, applies_to: [ASTER]}
+    - {name: vegetation_S2,    layer: S2-NDVI,  op: ">", mode: percentile, value: 85, buffer_px: 2, applies_to: [S2]}
+    - {name: water,            layer: S2-MNDWI, op: ">", mode: value,      value: 0.0, applies_to: [ASTER, S2, DEM]}
+  external: []
+flags:
+  - {name: partial_vegetation_cover, layer: S2-NDVI, op: ">", mode: percentile, value: 60}
+  - {name: tir_unsupported, layer: TIR_SUPPORT_MASK, op: "==", mode: value, value: 0}
+
+# ------------------------------------------------------------------ engineered features
+engineer:
+  vector_sources:
+    # derived_from: DEM | imagery | unknown. If lineaments were digitised from Sentinel-2/ASTER/Landsat, a
+    # "DEM-only" model that uses them is NOT DEM-only: set feature_set to the image set, or null to drop them.
+    lineaments: {path: "DEM Features/Lineaments/Lineaments.shp", derived_from: unknown, feature_set: DEM}
+    streams:    {path: "DEM Features/Stream to feature/stream to feature.shp", derived_from: DEM, feature_set: DEM}
+  provenance_check:                          # heuristic: do lineaments follow DEM edges or image edges?
+    dem_layer: DEM_utm
+    image_layers: {S2: S2-BR-05, ASTER: AST-BR-16}
+  vector_features:
+    - {source: lineaments, type: distance,             name: dist_lineament,      family: structure, direction: low,  label: "distance to lineament"}
+    - {source: lineaments, type: density,              name: dens_lineament,      family: structure, direction: high, radius_m: 1000, label: "lineament density"}
+    - {source: lineaments, type: intersection_density, name: dens_lin_intersect,  family: structure, direction: high, radius_m: 1000, weight: 1.5, label: "lineament intersection density"}
+    - {source: lineaments, type: orientation_density,  name: dens_lin_NE, az_min: 20,  az_max: 70,  family: structure, direction: high, radius_m: 1000, label: "NE-trending lineament density"}
+    - {source: lineaments, type: orientation_density,  name: dens_lin_NW, az_min: 110, az_max: 160, family: structure, direction: high, radius_m: 1000, label: "NW-trending lineament density"}
+    - {source: streams,    type: distance,             name: dist_stream,         family: hydrology, direction: neutral, label: "distance to drainage"}
+  local_anomaly:
+    enabled: true
+    windows_m: [210]
+    apply_to_families: [AlOH_muscovite, quartz_felsic, Li_pegmatite_proxy]
+    apply_to_sensors: [ASTER, S2]
+    min_valid_fraction: 0.5
+    exclude_tir: true
+
+transforms: {auto_log_skew: 2.0}
+
+# ------------------------------------------------------------------ audit / selection (runs SEPARATELY per feature set)
+audit:
+  min_valid_fraction: 0.6
+  max_samples: 60000
+  rank_duplicate_threshold: 0.995
+  corr_threshold: 0.80
+  vif_threshold: 20
+  vegetation_layers: {ASTER: AST-NDVI, S2: S2-NDVI}   # each sensor is checked against its OWN NDVI (its own date)
+  vegetation_corr_flag: 0.6
+  vegetation_action: drop
+selection:
+  family_priority: [AlOH_muscovite, quartz_felsic, structure, mafic_host, topography, hydrology,
+                    iron_context, surface_exposure, Li_pegmatite_proxy]
+  prefer_regex: []
+  min_per_family: 1
+  protect: ['^AST-BR-18$']
+  max_per_family: {default: 8, Li_pegmatite_proxy: 5}
+store: {write_tables: false}
+
+# ------------------------------------------------------------------ model
+models:
+  fuzzy_gamma:                                        # REVIEW, then FREEZE
+    gamma_range: [0.6, 0.95]
+    n_mc: 500
+    weight_jitter: 0.30
+    membership: {lo: 0.20, hi: 0.95, jitter: 0.05}
+    band: {center: 0.65, width: 0.20}
+    ahp:
+      priority_scores: {AlOH_muscovite: 3, quartz_felsic: 3, structure: 3, mafic_host: 2, topography: 2,
+                        hydrology: 1, iron_context: 1, surface_exposure: 1, Li_pegmatite_proxy: 1}
+      pairwise: []
+    sensitivity:
+      layer_factors: [0.0, 0.5, 1.5]                  # one-at-a-time: drop, halve, +50%
+      family_factors: [0.0, 0.5, 1.5]
+      sample: 20000
+  isolation_forest:                                   # not run by default
+    n_forests: 100
+    n_estimators: 100
+    max_samples: 256
+    max_features: 0.7
+    clip_min: 0.0
+    clip_max: 6.0
+    attribution: auto
+    attr_n_forests: 5
+  topsis_critic:                                      # not run by default
+    n_boot: 200
+    max_rows: 50000
+    weight_jitter: 0.20
+    clip_percentiles: [1, 99]
+
+# ------------------------------------------------------------------ points
+points:
+  top_fraction: 0.05
+  min_separation_m: 500
+  local_max_window_px: 3
+  rank_k_sd: 1.0
+  max_points: 20                 # the SAME number of points for every set
+  smooth_sigma_px: 1.5
+  tier_quantiles: [0.90, 0.95, 0.99]
+  top_n_features: 5
+  direction_phrases: {high: "high", low: "low", band: "mid-range"}
+  context_layers: [dist_lineament]
+  field_columns: [Visited, Visit_date, Outcrop_present, Pegmatite_within_100m, Mineralogy, SWIR_reading,
+                  pXRF_Rb, pXRF_Sn, pXRF_Nb, pXRF_Ta, pXRF_Cs, Li2O_assay, Photo_ref, Notes]
+
+validation:
+  top_fraction: 0.05
+  stability_sample: 20000
+
+# ------------------------------------------------------------------ evaluation against known occurrences
+evaluation:
+  decluster_m: 250               # occurrences closer than this count as one target (workings on one pegmatite)
+  block_size_m: 3000             # spatial blocks: whole blocks go to calibration OR held-out
+  holdout_fraction: 0.30
+  capture_fractions: [0.05, 0.10]
+  wofe_top_fractions: [0.10, 0.20, 0.30]
+  n_boot: 1000
+  n_null: 1000                   # random point sets for the baseline envelope
+  max_holdout_consults: 5        # warn when revisions keep re-using the held-out set
+  signal_rule: {min_auc_ci_low: 0.5, null_quantile: 0.95}
+
+# ------------------------------------------------------------------ what each source cannot see (goes into the report)
+sensor_limitations:
+  ASTER: >-
+    30 m SWIR / 90 m TIR pixels against pegmatite dykes that are usually metres to a few tens of metres wide:
+    the target is sub-pixel and mixed with host rock and soil. SWIR is usable only for scenes before April 2008,
+    so surface cover is from that date. Bands 5-8 resolve the 2.2 um Al-OH feature but cannot separate
+    lepidolite from muscovite, and spodumene, quartz and albite have no diagnostic SWIR feature. TIR silica
+    indices see quartz-rich ground at 90 m, not individual dykes.
+  S2: >-
+    Only two SWIR bands (B11 1.61 um, B12 2.19 um, ~175 nm wide): it cannot resolve the 2.16/2.20/2.25/2.33 um
+    absorptions, so it maps broad clay/hydroxyl and iron oxides, not micas or lithium minerals. No thermal bands,
+    so no silica mapping. Bright featureless pegmatite shows up only as albedo or texture at 10-20 m.
+  DEM: >-
+    No mineralogy. It shows morphology and structure (resistant ridges, lineaments, drainage): context for
+    where pegmatites may be emplaced or exposed, not detection. A 30 m DEM cannot resolve dykes narrower than
+    about two pixels, and resistant ridges can be any hard lithology. Treat it as a context layer.
+
+# ------------------------------------------------------------------ blinded field test (winning set)
+field_test:
+  sensor: auto                   # auto = best set that passes the signal rule; or ASTER | S2 | DEM
+  id_prefix: SL
+  waves: 2
+  composition: {top: 20, random: 10, low: 10}
+  low_quantile: 0.20
+  flag_near_known_m: 500         # top points this close to a known occurrence are flagged in the KEY
+  result_columns: [Visit_date, Outcrop_present, Pegmatite_within_100m, Mineralogy, SWIR_reading, pXRF_Rb,
+                   pXRF_Sn, pXRF_Nb, pXRF_Ta, pXRF_Cs, Li2O_assay, Photo_ref, Notes]
+  hit_column: Pegmatite_within_100m
+  outcrop_column: Outcrop_present
+  non_informative_values: ["cover", "none", "no outcrop", ""]
+  top_categories: [Top]
+  success_min_hit_rate: 0.40
+  success_min_ratio: 3.0
+  success_alpha: 0.05
+
+# ------------------------------------------------------------------ output folder layout
+layout:
+  features: 01_feature_engineering
+  models: 02_models
+  comparison: 03_comparison
+  evaluation: 04_evaluation
+  field_test: 05_field_test
+  fe_sub: {spectral: 00_spectral_check, qa: 01_qa_inventory, aligned: 02_aligned_masked, audit: 03_audit,
+           engineered: 04_engineered, selected: 05_selected, store: 06_feature_store}
+  model_dirs: {M1: M1_Fuzzy_Gamma, M2: M2_IsolationForest, M3: M3_TOPSIS_CRITIC}
